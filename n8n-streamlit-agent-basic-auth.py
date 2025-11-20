@@ -358,7 +358,22 @@ def reset_conversation():
         if key in st.session_state: del st.session_state[key]
     for d in ["temp_audio", "temp_component"]:
         path = os.path.join(os.getcwd(), d)
-        if os.path.exists(path): shutil.rmtree(path)
+        if os.path.exists(path):
+            try:
+                # Xóa tất cả file và thư mục con bên trong, nhưng giữ lại thư mục chính
+                for root, dirs, files in os.walk(path):
+                    for file in files:
+                        try:
+                            os.remove(os.path.join(root, file))
+                        except Exception as e:
+                            print(f"Không thể xóa file {file}: {e}")
+                    for dir_name in dirs:
+                        try:
+                            shutil.rmtree(os.path.join(root, dir_name))
+                        except Exception as e:
+                            print(f"Không thể xóa thư mục {dir_name}: {e}")
+            except Exception as e:
+                print(f"Lỗi khi xóa nội dung trong {d}: {e}")
     st.session_state.session_id = generate_session_id()
     st.session_state.component_key = str(uuid.uuid4())
     st.cache_data.clear()
