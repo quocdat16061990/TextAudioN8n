@@ -14,5 +14,12 @@ services:
     volumes:
       - "./temp_audio:/app/temp_audio"
       - "./temp_component:/app/temp_component"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.textaudio.rule=Host(`texttoaudio.shopabcquocdat.xyz`)
+      - traefik.http.routers.textaudio.entrypoints=web,websecure
+      - traefik.http.routers.textaudio.tls=true
+      - traefik.http.routers.textaudio.tls.certresolver=mytlschallenge
+      - traefik.http.services.textaudio.loadbalancer.server.port=8501
     restart: unless-stopped
 
