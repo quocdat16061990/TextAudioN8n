@@ -136,10 +136,35 @@ script = """
     let speechEvents = null;
     let silenceTimeout = null;
     let isRecording = false;
+    let audioMimeType = 'audio/webm'; // Default format
     const toggleBtn = document.getElementById('toggleBtn');
     
     Streamlit.setComponentReady();
     Streamlit.setFrameHeight(60);
+    
+    // Detect supported audio format for iOS compatibility
+    function getSupportedMimeType() {
+        const types = [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/mp4',
+            'audio/mp4;codecs=mp4a.40.2',
+            'audio/aac',
+            'audio/ogg;codecs=opus',
+            'audio/wav'
+        ];
+        
+        for (let type of types) {
+            if (MediaRecorder.isTypeSupported(type)) {
+                console.log('Using audio format:', type);
+                return type;
+            }
+        }
+        
+        // Fallback: let browser choose
+        console.log('No specific format found, using default');
+        return '';
+    }
     
     function blobToBase64(blob) {
         return new Promise((resolve, reject) => {
@@ -154,11 +179,14 @@ script = """
     }
     
     async function handleRecordingStopped() {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        // Use the detected mime type or default to webm
+        const blobType = audioMimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunks, { type: blobType });
         const base64Data = await blobToBase64(audioBlob);
         
         Streamlit.setComponentValue({
             audioData: base64Data,
+            audioFormat: blobType,
             status: 'stopped',
             timestamp: Date.now()
         });
@@ -180,7 +208,20 @@ script = """
         if (!isRecording) {
             try {
                 mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' });
+                
+                // Detect and use supported format (especially for iOS)
+                audioMimeType = getSupportedMimeType();
+                const recorderOptions = audioMimeType ? { mimeType: audioMimeType } : {};
+                
+                try {
+                    mediaRecorder = new MediaRecorder(mediaStream, recorderOptions);
+                } catch (e) {
+                    // Fallback if format detection fails
+                    console.warn('Failed to create MediaRecorder with detected format, using default:', e);
+                    mediaRecorder = new MediaRecorder(mediaStream);
+                    audioMimeType = mediaRecorder.mimeType || 'audio/webm';
+                }
+                
                 audioChunks = [];
                 
                 mediaRecorder.ondataavailable = event => {
@@ -334,14 +375,29 @@ def display_output(output):
 
     if audio_path and os.path.exists(audio_path):
         st.markdown('<div class="assistant">', unsafe_allow_html=True)
-        st.audio(audio_path, format="audio/mp3")
+        # Use mpeg format for better iOS compatibility
+        st.audio(audio_path, format="audio/mpeg")
         st.markdown('</div>', unsafe_allow_html=True)
 
 
 def process_audio_input(audio_data):
     try:
         audio_bytes = base64.b64decode(audio_data["audioData"])
-        st.audio(audio_bytes, format="audio/webm")
+        # Detect audio format from the data or use default
+        audio_format = audio_data.get("audioFormat", "audio/webm")
+        
+        # Map format for st.audio compatibility
+        format_map = {
+            "audio/webm": "audio/webm",
+            "audio/mp4": "audio/mp4",
+            "audio/mp4;codecs=mp4a.40.2": "audio/mp4",
+            "audio/aac": "audio/mp4",
+            "audio/ogg;codecs=opus": "audio/ogg",
+            "audio/wav": "audio/wav"
+        }
+        display_format = format_map.get(audio_format, "audio/webm")
+        
+        st.audio(audio_bytes, format=display_format)
         with st.spinner("🎤 Đang nhận diện giọng nói với OpenAI Whisper..."):
             transcript = transcribe_audio(audio_bytes)
         with st.spinner("🤖 Đang chờ phản hồi từ AI..."):
@@ -358,22 +414,7 @@ def reset_conversation():
         if key in st.session_state: del st.session_state[key]
     for d in ["temp_audio", "temp_component"]:
         path = os.path.join(os.getcwd(), d)
-        if os.path.exists(path):
-            try:
-                # Xóa tất cả file và thư mục con bên trong, nhưng giữ lại thư mục chính
-                for root, dirs, files in os.walk(path):
-                    for file in files:
-                        try:
-                            os.remove(os.path.join(root, file))
-                        except Exception as e:
-                            print(f"Không thể xóa file {file}: {e}")
-                    for dir_name in dirs:
-                        try:
-                            shutil.rmtree(os.path.join(root, dir_name))
-                        except Exception as e:
-                            print(f"Không thể xóa thư mục {dir_name}: {e}")
-            except Exception as e:
-                print(f"Lỗi khi xóa nội dung trong {d}: {e}")
+        if os.path.exists(path): shutil.rmtree(path)
     st.session_state.session_id = generate_session_id()
     st.session_state.component_key = str(uuid.uuid4())
     st.cache_data.clear()

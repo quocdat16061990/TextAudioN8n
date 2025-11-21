@@ -9,8 +9,6 @@ services:
       - "${PORT:-8501}:8501"
     environment:
       PORT: 8501
-    env_file:
-      - .env
     volumes:
       - "./temp_audio:/app/temp_audio"
       - "./temp_component:/app/temp_component"
@@ -23,3 +21,12 @@ services:
       - traefik.http.services.textaudio.loadbalancer.server.port=8501
     restart: unless-stopped
 
+    networks:
+      - root_default
+      - textaudion8n_default
+
+networks:
+  root_default:
+    external: true  
+  textaudion8n_default:
+    external: true  
