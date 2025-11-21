@@ -15,7 +15,14 @@ WEBHOOK_URL = st.secrets.get("WEBHOOK_URL")
 OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY")
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-
+hide_streamlit_style = """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # ========= UTILS =========
 def generate_session_id():
     return str(uuid.uuid4())
